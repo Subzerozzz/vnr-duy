@@ -184,6 +184,15 @@ h2{font:600 clamp(1.8rem,4vw,2.6rem)/1.15 var(--serif);letter-spacing:-.01em}
 .explain p{margin-top:.25rem;color:#ead9bc}
 @keyframes pop{from{opacity:0;translate:0 8px}to{opacity:1;translate:0 0}}
 .next{margin-top:1.5rem}
+.timer{display:flex;align-items:center;gap:.9rem;margin-bottom:1.25rem}
+.timer .tnum{flex:none;min-width:2.6rem;height:2.6rem;padding:0 .5rem;border-radius:999px;display:grid;place-items:center;border:2px solid var(--gold);font:600 1.05rem var(--serif);color:var(--gold);font-variant-numeric:tabular-nums}
+.timer .tbar{flex:1;height:6px;border-radius:6px;background:#4a1c15;overflow:hidden}
+.timer .tbar i{display:block;height:100%;width:100%;background:linear-gradient(90deg,var(--gold),#e8c778);transition:width .1s linear}
+.timer.warn .tnum{border-color:var(--vermilion-hi);color:#fff;background:var(--vermilion);animation:tpulse .5s ease-in-out infinite alternate}
+.timer.warn .tbar i{background:var(--vermilion-hi)}
+.timer.stop .tnum{border-color:var(--gold-dim);color:var(--muted);font:500 .85rem var(--sans)}
+.timer.stop .tbar i{background:var(--gold-dim);transition:none}
+@keyframes tpulse{to{scale:1.12}}
 .qbox>*{animation:pop .5s cubic-bezier(.16,1,.3,1) both}
 .qbox .qtext{animation-delay:.05s}
 .opts li{animation:pop .5s cubic-bezier(.16,1,.3,1) both}
@@ -229,7 +238,7 @@ h2{font:600 clamp(1.8rem,4vw,2.6rem)/1.15 var(--serif);letter-spacing:-.01em}
 }
 @media (prefers-reduced-motion:reduce){
   #drum svg,#drum .star,.ticker div{animation:none}
-  .rise,.gate,.qbox>*,.opts li,.explain,.join-card{animation:none;opacity:1}
+  .rise,.gate,.qbox>*,.opts li,.explain,.join-card,.timer .tnum{animation:none;opacity:1}
   h1 .ln>span{animation:none;translate:0 0}
   #drum .ray{animation:none;opacity:1}
   *{transition:none!important}
@@ -247,7 +256,7 @@ h2{font:600 clamp(1.8rem,4vw,2.6rem)/1.15 var(--serif);letter-spacing:-.01em}
     <p class="lede rise" style="--d:1.6">Đi qua 4 phòng trưng bày. Mỗi phòng có hiện vật để đọc và các câu hỏi để thử sức, từ nhận biết đến vận dụng cao.</p>
     <button class="btn rise" style="--d:1.8" id="start">Bắt đầu tham quan</button>
     <p class="team-chip rise" style="--d:1.9" id="team-chip" hidden></p>
-    <p class="hint rise" style="--d:2">20 câu hỏi, mỗi câu có một đáp án đúng. Bấm A, B, C, D để chọn nhanh.</p>
+    <p class="hint rise" style="--d:2">20 câu hỏi, mỗi câu 20 giây và một đáp án đúng. Bấm A, B, C, D để chọn nhanh.</p>
   </div>
   <div class="ticker" aria-hidden="true"><div id="tick"></div></div>
 </section>
@@ -265,8 +274,8 @@ h2{font:600 clamp(1.8rem,4vw,2.6rem)/1.15 var(--serif);letter-spacing:-.01em}
       <p class="sub">Điểm của nhóm được gửi trực tiếp tới ban tổ chức sau mỗi câu trả lời.</p>
       <ol class="steps">
         <li><span>1</span>Nhập tên nhóm và tên người đại diện.</li>
-        <li><span>2</span>Đi lần lượt qua 4 phòng, mỗi câu chỉ được chọn một lần.</li>
-        <li><span>3</span>Điểm cao hơn ở các phòng sau. Bằng điểm thì nhóm làm nhanh hơn xếp trên.</li>
+        <li><span>2</span>Đi lần lượt qua 4 phòng. Mỗi câu có 20 giây và chỉ được chọn một lần; hết giờ tính là sai.</li>
+        <li><span>3</span>Xếp hạng theo điểm; bằng điểm thì nhóm có tổng thời gian làm bài ít hơn xếp trên.</li>
       </ol>
     </div>
     <form class="join-card" id="join-form" novalidate>
@@ -345,16 +354,20 @@ h2{font:600 clamp(1.8rem,4vw,2.6rem)/1.15 var(--serif);letter-spacing:-.01em}
 <div id="curtain" aria-hidden="true"><svg viewBox="-50 -50 100 100"><polygon fill="currentColor" points="0,-46 11,-15 44,-14 18,6 27,38 0,19 -27,38 -18,6 -44,-14 -11,-15"/></svg></div>
 
 <script type="module">
-import { ROOMS, TOTAL_Q, encode, decode, scoreOf, keyOf } from "./js/questions.js";
+import { ROOMS, TOTAL_Q, QTIME, encode, decode, encodeT, decodeT, totalT, scoreOf, keyOf } from "./js/questions.js";
 import { createStore } from "./js/store.js";
 
 const LET=["A","B","C","D"];
 const KEY="vnr-museum-team-v2";
 const blank=()=>ROOMS.map(r=>r.qs.map(()=>null));
-// S.team = {id,name,leader} của nhóm đang chơi trên máy này; S.a[room][q] = đáp án đã chọn | null
-let S={team:null,a:blank()};
-try{const r=JSON.parse(localStorage.getItem(KEY));if(r&&r.team&&r.team.id){S.team=r.team;S.a=decode(r.a)}}catch(e){}
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({team:S.team,a:encode(S.a)}))}catch(e){}};
+// S.team = {id,name,leader} của nhóm đang chơi trên máy này
+// S.a[room][q] = đáp án đã chọn (0-3) | -1 hết giờ | null chưa trả lời
+// S.t[room][q] = thời gian trả lời (1/10 giây) | null
+// S.qs = {k:"room-q", at: thời điểm bắt đầu tính giờ} của câu đang làm (để tải lại trang không được thêm giờ)
+let S={team:null,a:blank(),t:blank(),qs:null};
+try{const r=JSON.parse(localStorage.getItem(KEY));if(r&&r.team&&r.team.id){S.team=r.team;S.a=decode(r.a);S.t=decodeT(r.t);S.qs=r.qs||null}}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify({team:S.team,a:encode(S.a),t:encodeT(S.t),qs:S.qs}))}catch(e){}};
+const resetLocal=()=>{S.team=null;S.a=blank();S.t=blank();S.qs=null;save()};
 const $=s=>document.querySelector(s);
 let cur=0,qi=0;
 
@@ -387,10 +400,10 @@ function attach(){
     if(!S.team||S.team.id!==id)return;
     if(!d||!d.name){kicked();return}
     // gộp tiến độ: câu nào đã có đáp án ở một bên thì giữ lại
-    const remote=decode(d.a);let changed=false;
-    S.a=S.a.map((room,i)=>room.map((x,j)=>{if(x===null&&remote[i][j]!==null){changed=true;return remote[i][j]}return x}));
+    const remote=decode(d.a),rt=decodeT(d.times);let changed=false;
+    S.a=S.a.map((room,i)=>room.map((x,j)=>{if(x===null&&remote[i][j]!==null){changed=true;S.t[i][j]=rt[i][j];return remote[i][j]}return x}));
     if(changed){save();if(viewIs("hall"))renderHall();else updStats()}
-    if(encode(S.a)!==d.a)sync();
+    if(encode(S.a)!==d.a||(d.times!==undefined&&encodeT(S.t)!==d.times))sync();
   });
   unpresence=store.presence(id);
 }
@@ -398,7 +411,7 @@ function detach(){
   if(unwatch)unwatch();if(unpresence)unpresence();unwatch=unpresence=null;
 }
 function kicked(){
-  detach();S.team=null;S.a=blank();save();
+  detach();resetLocal();
   joinNotice="Ban tổ chức đã làm mới lượt chơi. Vui lòng đăng ký lại nhóm.";
   renderTeam();
   if(!viewIs("hero"))show("join");
@@ -406,12 +419,15 @@ function kicked(){
 function sync(extra={}){
   if(!store||!S.team)return;
   const sc=scoreOf(S.a);
-  store.updateTeam(S.team.id,{a:encode(S.a),right:sc.right,points:sc.points,answered:sc.answered,done:sc.done,updatedAt:store.ts(),...extra})
+  const id=S.team.id;
+  store.updateTeam(id,{a:encode(S.a),right:sc.right,points:sc.points,answered:sc.answered,done:sc.done,updatedAt:store.ts(),...extra})
     .catch(e=>console.warn("Không gửi được điểm:",e));
+  // gửi riêng thời gian để nếu Rules cũ chưa cho phép trường này thì điểm vẫn được lưu
+  store.updateTeam(id,{times:encodeT(S.t)}).catch(e=>console.warn("Không gửi được thời gian (kiểm tra Rules):",e));
 }
 function leave(){
   if(store&&S.team)store.updateTeam(S.team.id,{online:false}).catch(()=>{});
-  detach();S.team=null;S.a=blank();save();joinNotice="";renderTeam();show("join");
+  detach();resetLocal();joinNotice="";renderTeam();show("join");
 }
 const newId=()=>"t"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
@@ -502,11 +518,11 @@ $("#join-form").addEventListener("submit",async e=>{
         say(`Tên “${name}” đã có nhóm đăng ký. Nếu đúng là nhóm bạn, hãy nhập đúng tên đại diện đã đăng ký; nếu không, hãy chọn tên khác.`);
         return;
       }
-      S.team={id:ex.id,name:ex.data.name,leader:ex.data.leader};S.a=decode(ex.data.a);
+      S.team={id:ex.id,name:ex.data.name,leader:ex.data.leader};S.a=decode(ex.data.a);S.t=decodeT(ex.data.times);S.qs=null;
     }else{
       const id=newId();
       await st.createTeam(id,{name,nameKey:keyOf(name),leader,a:encode(blank()),right:0,points:0,answered:0,done:false,online:true,joinedAt:st.ts(),updatedAt:st.ts()});
-      S.team={id,name,leader};S.a=blank();
+      S.team={id,name,leader};S.a=blank();S.t=blank();S.qs=null;
     }
     save();attach();joinNotice="";renderTeam();
     say("");show("hall");
@@ -550,12 +566,16 @@ function openRoom(i){
   qi=S.a[i].findIndex(x=>x===null);if(qi<0)qi=0;
   $("#room-lv").textContent=r.lv;$("#room-name").textContent=r.name;$("#room-desc").textContent=r.desc;
   $("#plaque").innerHTML=`<strong>${r.plaque.t}</strong><ul>${r.plaque.l.map(x=>`<li>${x}</li>`).join("")}</ul>`;
-  show("room");renderQ();
+  show("room");renderQ(REDUCE?0:900);
 }
 
-function renderQ(){
+const qKey=()=>cur+"-"+qi;
+function renderQ(delay=0){
   updStats();
   const r=ROOMS[cur],q=r.qs[qi],ans=S.a[cur][qi],done=ans!==null;
+  // bắt đầu (hoặc tiếp tục) tính giờ cho câu chưa trả lời
+  if(!done&&(!S.qs||S.qs.k!==qKey())){S.qs={k:qKey(),at:Date.now()+delay};save()}
+  const spent=S.t[cur][qi];
   const opts=q[1].map((t,k)=>{
     let c="opt";
     if(done){c+=k===q[2]?" right":k===ans?" wrong":" dim"}
@@ -566,16 +586,31 @@ function renderQ(){
   $("#qbox").classList.toggle("still",done);
   $("#qbox").innerHTML=`
     <div class="qmeta"><span>Câu ${ROOMS.slice(0,cur).reduce((n,x)=>n+x.qs.length,0)+qi+1} / 20</span><span>${r.pts} điểm</span></div>
+    ${done?`<div class="timer stop"><span class="tnum">${ans<0?"Hết giờ":spent!=null?fmtS(spent)+" giây":"–"}</span><span class="tbar"><i style="width:${spent!=null?Math.max(0,100-spent/(QTIME*10)*100):0}%"></i></span></div>`
+      :`<div class="timer" id="timer" role="timer" aria-label="Thời gian còn lại"><span class="tnum" id="tnum">${QTIME}</span><span class="tbar"><i id="tbar"></i></span></div>`}
     <p class="qtext">${q[0]}</p>
     <ul class="opts">${opts}</ul>
-    ${done?`<div class="explain" role="status"><b>${ans===q[2]?"Chính xác.":"Chưa đúng. Đáp án là "+LET[q[2]]+"."}</b><p>${q[3]}</p></div>
+    ${done?`<div class="explain" role="status"><b>${ans===q[2]?"Chính xác.":ans<0?"Hết giờ! Đáp án là "+LET[q[2]]+".":"Chưa đúng. Đáp án là "+LET[q[2]]+"."}</b><p>${q[3]}</p></div>
     <button class="btn next" id="next">${last?"Hoàn thành phòng":"Câu tiếp theo"}</button>`:""}`;
   $("#qbox").querySelectorAll(".opt").forEach(b=>b.onclick=()=>pick(+b.dataset.k));
   const n=$("#next");if(n){n.onclick=next;n.focus({preventScroll:true})}
+  tick();
 }
+const fmtS=ds=>(ds/10).toFixed(1).replace(".",",");
+/* Đồng hồ đếm ngược: cập nhật 10 lần/giây, hết giờ thì tự tính là sai */
+function tick(){
+  if(!viewIs("room")||S.a[cur][qi]!==null||!S.qs||S.qs.k!==qKey())return;
+  const left=Math.max(0,S.qs.at+QTIME*1000-Date.now()),sec=Math.min(QTIME,Math.ceil(left/1000));
+  const num=$("#tnum"),bar=$("#tbar"),box=$("#timer");
+  if(num){num.textContent=sec;bar.style.width=Math.min(100,left/(QTIME*10))+"%";box.classList.toggle("warn",left<=5000)}
+  if(left<=0)pick(-1);
+}
+setInterval(tick,100);
 function pick(k){
   if(!S.team||S.a[cur][qi]!==null)return;
-  S.a[cur][qi]=k;save();
+  const start=S.qs&&S.qs.k===qKey()?S.qs.at:Date.now();
+  S.t[cur][qi]=Math.min(QTIME*10,Math.max(0,Math.round((Date.now()-start)/100)));
+  S.a[cur][qi]=k;S.qs=null;save();
   const right=isRight(cur,qi),sc=scoreOf(S.a),extra={};
   if(store){
     if(right)extra.scoreAt=store.ts();
@@ -607,7 +642,7 @@ function renderEnd(){
   $("#e-max").textContent=` / ${MAX}`;
   $("#e-pts").textContent=0;tween($("#e-pts"),p,1800);setTimeout(confetti,350);
   $("#e-rank").textContent=pct>=.9?"Người giữ lửa của bảo tàng":pct>=.7?"Hướng dẫn viên xuất sắc":pct>=.4?"Khách tham quan chăm chỉ":"Cần ghé lại vài phòng";
-  $("#e-note").textContent=`Nhóm trả lời đúng ${rights()}/20 câu. Thang điểm: 10, 20, 30 và 40 điểm mỗi câu theo cấp độ. Các tình huống vận dụng là ví dụ minh họa, không phải sự kiện lịch sử trích dẫn.`;
+  $("#e-note").textContent=`Nhóm trả lời đúng ${rights()}/20 câu, tổng thời gian làm bài ${fmtS(totalT(S.t))} giây. Thang điểm: 10, 20, 30 và 40 điểm mỗi câu theo cấp độ. Các tình huống vận dụng là ví dụ minh họa, không phải sự kiện lịch sử trích dẫn.`;
 }
 
 /* Ngôi sao vàng năm cánh giữa các tia sáng và vòng tròn đồng tâm */

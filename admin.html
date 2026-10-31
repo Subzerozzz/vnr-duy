@@ -78,6 +78,9 @@ h2{font:600 1.4rem/1.2 var(--serif)}
 .dot{flex:none;width:8px;height:8px;border-radius:50%;border:1px solid var(--gold-dim)}
 .dot.ok{background:var(--gold);border-color:var(--gold)}
 .dot.bad{background:var(--vermilion);border-color:var(--vermilion)}
+.dot.to{border:2px solid var(--vermilion-hi);background:transparent}
+.rule{margin-top:.6rem;font-size:.85rem;color:var(--muted)}
+.rule i{display:inline-block;vertical-align:middle;margin:0 .2rem 0 .6rem}
 .pg small{display:block;margin-top:.3rem;font-size:.78rem;color:var(--muted)}
 .cr b{font-weight:600;font-size:1.05rem}.cr{color:var(--muted)}
 .tt{font-size:.95rem}
@@ -169,6 +172,7 @@ body.present .pt b{font-size:2.2rem}
     <div>
       <p class="kicker">Bảng điểm trực tiếp</p>
       <h1>Xếp hạng các nhóm</h1>
+      <p class="rule">Xếp theo điểm; bằng điểm thì tổng thời gian ít hơn đứng trên.<i class="dot ok"></i>đúng<i class="dot bad"></i>sai<i class="dot to"></i>hết giờ</p>
     </div>
     <div class="share">Link cho các nhóm: <code id="link"></code><button class="tool" id="copy" type="button">Sao chép</button></div>
   </div>
@@ -184,7 +188,7 @@ body.present .pt b{font-size:2.2rem}
 
   <section class="board" aria-label="Bảng xếp hạng">
     <div class="cols thead">
-      <span style="text-align:center">#</span><span>Nhóm</span><span class="pg">Tiến độ 4 phòng</span><span class="cr">Đúng</span><span class="tt">Thời gian</span><span>Điểm</span><span class="ac"></span>
+      <span style="text-align:center">#</span><span>Nhóm</span><span class="pg">Tiến độ 4 phòng</span><span class="cr">Đúng</span><span class="tt">Tổng thời gian</span><span>Điểm</span><span class="ac"></span>
     </div>
     <div id="rows"></div>
     <div class="empty" id="empty"><b>Chưa có nhóm nào tham gia</b>Gửi link phía trên cho các nhóm. Nhóm nào đăng ký sẽ hiện ở đây ngay lập tức.</div>
@@ -192,7 +196,7 @@ body.present .pt b{font-size:2.2rem}
 
   <section class="qstats">
     <h2>Tỉ lệ trả lời đúng từng câu</h2>
-    <p class="sub">Tính trên các nhóm đã trả lời câu đó. Rê chuột vào ô để xem nội dung câu hỏi.</p>
+    <p class="sub">Tính trên các nhóm đã trả lời câu đó (hết giờ tính là sai). TB = thời gian trả lời trung bình. Rê chuột vào ô để xem nội dung câu hỏi.</p>
     <div class="qrooms" id="qrooms"></div>
   </section>
 </main>
@@ -200,7 +204,7 @@ body.present .pt b{font-size:2.2rem}
 
 <script type="module">
 import CONFIG from "./js/config.js";
-import { ROOMS, TOTAL_Q, MAX, decode, scoreOf } from "./js/questions.js";
+import { ROOMS, TOTAL_Q, MAX, QTIME, decode, decodeT, totalT, scoreOf } from "./js/questions.js";
 import { createStore } from "./js/store.js";
 
 const $=s=>document.querySelector(s);
@@ -230,18 +234,19 @@ async function start(){
   if(store.mode==="local"){$("#local-note").hidden=false;setSync("test","Chế độ thử")}
   else store.onConnection(ok=>setSync(ok?"ok":"off",ok?"Trực tiếp":"Mất kết nối…"));
   store.watchTeams(onData,err=>{console.error(err);setSync("off","Không đọc được dữ liệu – kiểm tra Rules")});
-  setInterval(tickTimes,1000);
 }
 function setSync(c,t){const s=$("#sync");s.className="sync "+c;s.textContent=t}
 
 /* ---------- xếp hạng ---------- */
 function onData(raw){
   teams=Object.entries(raw||{}).filter(([,t])=>t&&t.name).map(([id,t])=>{
-    const a=decode(t.a),sc=scoreOf(a);
-    const reach=(sc.points>0?(t.scoreAt||t.updatedAt):t.updatedAt)-(t.joinedAt||0);
-    return {id,...t,a,...sc,reach:isFinite(reach)?reach:0};
+    const a=decode(t.a),sc=scoreOf(a),tq=decodeT(t.times);
+    // câu đã trả lời mà thiếu số liệu thời gian thì tính đủ 20 giây
+    const total=a.flat().reduce((n,x,k)=>x===null?n:n+(tq.flat()[k]??QTIME*10),0);
+    return {id,...t,a,tq,...sc,total};
   });
-  teams.sort((x,y)=>y.points-x.points||y.right-x.right||x.reach-y.reach||(x.joinedAt||0)-(y.joinedAt||0));
+  // Xếp hạng: điểm cao hơn -> tổng thời gian ít hơn -> trả lời nhiều câu hơn -> đăng ký sớm hơn
+  teams.sort((x,y)=>y.points-x.points||x.total-y.total||y.answered-x.answered||(x.joinedAt||0)-(y.joinedAt||0));
   // thông báo sự kiện mới
   if(!first)teams.forEach(t=>{
     const p=prev.get(t.id);
@@ -256,13 +261,12 @@ function onData(raw){
 
 const fmt=ms=>{if(!(ms>=0))return"–";const s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;
   return (h?h+":"+String(m).padStart(2,"0"):String(m).padStart(2,"0"))+":"+String(x).padStart(2,"0")};
+// 1/10 giây -> "m:ss,d"
+const fmtD=ds=>{const m=Math.floor(ds/600),r=(ds%600)/10;return m+":"+r.toFixed(1).padStart(4,"0").replace(".",",")};
 function timeCell(t){
-  if(!t.joinedAt)return "–";
-  if(t.done&&t.finishedAt)return `${fmt(t.finishedAt-t.joinedAt)}<small class="fin">Hoàn thành</small>`;
-  return `${fmt(store.now()-t.joinedAt)}<small>${t.online?"Đang chơi":"Offline"}</small>`;
-}
-function tickTimes(){
-  teams.forEach(t=>{if(!t.done){const el=document.querySelector(`.row[data-id="${t.id}"] .tt`);if(el)el.innerHTML=timeCell(t)}});
+  const st=t.done?`<small class="fin">Hoàn thành</small>`:`<small>${t.online?"Đang chơi":"Offline"}</small>`;
+  if(!t.answered)return `–${st}`;
+  return `${fmtD(t.total)}${st}`;
 }
 
 function makeRow(id){
@@ -283,7 +287,7 @@ function render(){
     el.className=`row cols${i<3&&t.points>0?" p"+(i+1):""}`;
     el.querySelector(".rk").textContent=i+1;
     el.querySelector(".tm").innerHTML=`<div class="nm"><i class="od${t.online?" on":""}" title="${t.online?"Online":"Offline"}"></i><span>${esc(t.name)}</span></div><div class="ld">Đại diện: ${esc(t.leader)}</div>`;
-    el.querySelector(".pg").innerHTML=`<div class="grp">${t.a.map((room,ri)=>`<div class="rm" title="${esc(ROOMS[ri].name)}">${room.map((x,j)=>`<span class="dot ${x===null?"":x===ROOMS[ri].qs[j][2]?"ok":"bad"}"></span>`).join("")}</div>`).join("")}</div><small>${t.answered}/${TOTAL_Q} câu đã trả lời</small>`;
+    el.querySelector(".pg").innerHTML=`<div class="grp">${t.a.map((room,ri)=>`<div class="rm" title="${esc(ROOMS[ri].name)}">${room.map((x,j)=>`<span class="dot ${x===null?"":x<0?"to":x===ROOMS[ri].qs[j][2]?"ok":"bad"}"></span>`).join("")}</div>`).join("")}</div><small>${t.answered}/${TOTAL_Q} câu đã trả lời</small>`;
     el.querySelector(".cr").innerHTML=`<b>${t.right}</b>/${TOTAL_Q}`;
     el.querySelector(".tt").innerHTML=timeCell(t);
     el.querySelector(".pt").innerHTML=`<b class="num">${t.points}<small> / ${MAX}</small></b><span class="pbar"><i style="width:${t.points/MAX*100}%"></i></span>`;
@@ -317,9 +321,11 @@ function renderQStats(){
     r.qs.map((q,qj)=>{
       k++;
       const ans=teams.filter(t=>t.a[ri][qj]!==null),ok=ans.filter(t=>t.a[ri][qj]===q[2]).length;
+      const tv=ans.map(t=>t.tq[ri][qj]).filter(v=>v!=null),avg=tv.length?tv.reduce((a,b)=>a+b,0)/tv.length/10:null;
+      const to=ans.filter(t=>t.a[ri][qj]<0).length;
       const pct=ans.length?Math.round(ok/ans.length*100):null;
       const col=pct===null?"var(--line)":`color-mix(in srgb, var(--ok) ${pct}%, var(--vermilion))`;
-      return `<div class="qc" title="Câu ${k}: ${esc(q[0])}\nĐáp án: ${"ABCD"[q[2]]}. ${esc(q[1][q[2]])}"><div class="n">Câu ${k}</div><div class="v num">${pct===null?"–":pct+"%"}</div><div class="c">${ok}/${ans.length} nhóm đúng</div><span class="m"><i style="width:${pct??0}%;background:${col}"></i></span></div>`;
+      return `<div class="qc" title="Câu ${k}: ${esc(q[0])}\nĐáp án: ${"ABCD"[q[2]]}. ${esc(q[1][q[2]])}"><div class="n">Câu ${k}</div><div class="v num">${pct===null?"–":pct+"%"}</div><div class="c">${ok}/${ans.length} nhóm đúng${avg!==null?` · TB ${avg.toFixed(1).replace(".",",")}s`:""}${to?` · ${to} hết giờ`:""}</div><span class="m"><i style="width:${pct??0}%;background:${col}"></i></span></div>`;
     }).join("")}</div></div>`).join("");
 }
 
@@ -338,9 +344,9 @@ function armable(btn,armedText,action){
 armable($("#reset"),"Bấm lần nữa để xóa hết",async()=>{await store.removeAll();toast("Đã xóa toàn bộ dữ liệu. Các nhóm sẽ phải đăng ký lại.")});
 
 $("#csv").onclick=()=>{
-  const head=["Hạng","Tên nhóm","Đại diện","Điểm","Số câu đúng","Đã trả lời","Hoàn thành","Thời gian","Đăng ký lúc"];
+  const head=["Hạng","Tên nhóm","Đại diện","Điểm","Số câu đúng","Đã trả lời","Hoàn thành","Tổng thời gian (giây)","Đăng ký lúc"];
   const rows=teams.map((t,i)=>[i+1,t.name,t.leader,t.points,t.right,t.answered,t.done?"Có":"Chưa",
-    t.done&&t.finishedAt?fmt(t.finishedAt-t.joinedAt):"",t.joinedAt?new Date(t.joinedAt).toLocaleString("vi-VN"):""]);
+    (t.total/10).toFixed(1).replace(".",","),t.joinedAt?new Date(t.joinedAt).toLocaleString("vi-VN"):""]);
   const csv=[head,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\r\n");
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));

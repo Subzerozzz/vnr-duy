@@ -11,6 +11,7 @@
           "nameKey":    { ".validate": "newData.isString() && newData.val().length <= 40" },
           "leader":     { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 40" },
           "a":          { ".validate": "newData.isString() && newData.val().length == 20" },
+          "times":      { ".validate": "newData.isString() && newData.val().length <= 120" },
           "right":      { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20" },
           "points":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 600" },
           "answered":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20" },

@@ -46,15 +46,33 @@ export const ROOMS = [
 export const TOTAL_Q = ROOMS.reduce((n, r) => n + r.qs.length, 0);
 export const MAX = ROOMS.reduce((n, r) => n + r.qs.length * r.pts, 0);
 
-// Mã hoá đáp án thành chuỗi 20 ký tự: "0"-"3" = đã chọn, "-" = chưa trả lời
-export const encode = a => a.flat().map(x => x === null ? "-" : String(x)).join("");
+// Thời gian cho mỗi câu (giây)
+export const QTIME = 20;
+
+// Mã hoá đáp án thành chuỗi 20 ký tự:
+// "0"-"3" = đã chọn, "x" = hết giờ (tính là sai), "-" = chưa trả lời
+// Trong bộ nhớ: 0-3 = đã chọn, -1 = hết giờ, null = chưa trả lời
+export const encode = a => a.flat().map(x => x === null ? "-" : x < 0 ? "x" : String(x)).join("");
 export const decode = s => {
   let k = 0;
   return ROOMS.map(r => r.qs.map(() => {
     const c = (s || "")[k++];
-    return c >= "0" && c <= "3" ? +c : null;
+    return c >= "0" && c <= "3" ? +c : c === "x" ? -1 : null;
   }));
 };
+
+// Thời gian trả lời từng câu, đơn vị 1/10 giây, nối bằng dấu phẩy ("73,200,,,...")
+export const encodeT = t => t.flat().map(x => x == null ? "" : x).join(",");
+export const decodeT = s => {
+  const p = String(s || "").split(",");
+  let k = 0;
+  return ROOMS.map(r => r.qs.map(() => {
+    const v = p[k++];
+    return v === undefined || v === "" || isNaN(+v) ? null : Math.min(+v, QTIME * 10);
+  }));
+};
+// Tổng thời gian (1/10 giây) của các câu đã trả lời
+export const totalT = t => t.flat().reduce((n, x) => n + (x || 0), 0);
 
 // Tính điểm từ chuỗi đáp án
 export function scoreOf(a) {

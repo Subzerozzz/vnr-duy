@@ -1,13 +1,13 @@
 # Bảo tàng Bài học Lịch sử Đảng · bản thi đấu theo nhóm
 
-- **Trang chơi** (`/`): mỗi nhóm nhập *tên nhóm* + *tên người đại diện* rồi chơi 4 phòng / 20 câu. Mỗi câu trả lời được gửi lên máy chủ ngay lập tức.
+- **Trang chơi** (`/`): mỗi nhóm nhập *tên nhóm* + *tên người đại diện* rồi chơi 4 phòng / 20 câu. Mỗi câu có **20 giây** (hết giờ tính là sai; tải lại trang không được cộng thêm giờ). Mỗi câu trả lời và thời gian trả lời được gửi lên máy chủ ngay lập tức.
 - **Trang ban tổ chức** (`/admin`): bảng xếp hạng cập nhật trực tiếp, có các mục sau:
   - tổng quan: số nhóm, số nhóm đang online, số nhóm đã xong, điểm trung bình, điểm cao nhất
   - tiến độ từng nhóm theo 4 phòng (chấm vàng là câu đúng, chấm đỏ là câu sai), thời gian làm bài, trạng thái online hay offline
   - tỉ lệ đúng của từng câu hỏi
   - nút Trình chiếu (toàn màn hình, để chiếu lên máy chiếu), Xuất CSV (mở được bằng Excel), Xóa một nhóm, Xóa tất cả
 
-**Cách xếp hạng:** nhóm nhiều điểm hơn đứng trên. Bằng điểm thì nhóm đúng nhiều câu hơn đứng trên. Vẫn bằng nhau thì nhóm đạt mức điểm đó trong thời gian ngắn hơn (tính từ lúc đăng ký) đứng trên.
+**Cách xếp hạng:** nhóm nhiều điểm hơn đứng trên. Bằng điểm thì nhóm có **tổng thời gian làm bài** ít hơn đứng trên. Tổng thời gian là tổng số giây nhóm dùng để trả lời từng câu (câu hết giờ tính 20 giây), nên thời gian đọc hiện vật hay chuyển phòng không bị tính.
 
 ## Cấu trúc file
 
@@ -85,4 +85,5 @@ Trang là web tĩnh, không có tài khoản đăng nhập, nên:
 
 - Thêm màn đăng ký nhóm, tên nhóm hiển thị trên thanh trên cùng, và chấm trạng thái kết nối.
 - Bỏ nút "Tham quan lại" ở màn kết quả, để các nhóm không reset rồi chơi lại lấy điểm cao hơn. Mỗi câu vẫn chỉ được chọn một lần như cũ.
+- Thêm đồng hồ 20 giây cho mỗi câu và xếp hạng theo tổng thời gian làm bài.
 - Sửa điểm tối đa: bản gốc ghi **/ 600**, nhưng 20 câu theo thang 10, 20, 30, 40 thực tế cộng lại tối đa **480** (5×10 + 6×20 + 5×30 + 4×40). Bản mới tự tính con số này từ bộ câu hỏi.
