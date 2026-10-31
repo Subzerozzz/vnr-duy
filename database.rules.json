@@ -1,0 +1,28 @@
+{
+  "rules": {
+    "vnr": {
+      "$session": {
+        ".read": true,
+        ".write": true,
+        ".indexOn": ["nameKey"],
+        "$id": {
+          ".validate": "newData.hasChildren(['name', 'nameKey', 'leader', 'a'])",
+          "name":       { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 40" },
+          "nameKey":    { ".validate": "newData.isString() && newData.val().length <= 40" },
+          "leader":     { ".validate": "newData.isString() && newData.val().length >= 2 && newData.val().length <= 40" },
+          "a":          { ".validate": "newData.isString() && newData.val().length == 20" },
+          "right":      { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20" },
+          "points":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 600" },
+          "answered":   { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20" },
+          "done":       { ".validate": "newData.isBoolean()" },
+          "online":     { ".validate": "newData.isBoolean()" },
+          "joinedAt":   { ".validate": "newData.isNumber()" },
+          "updatedAt":  { ".validate": "newData.isNumber()" },
+          "scoreAt":    { ".validate": "newData.isNumber()" },
+          "finishedAt": { ".validate": "newData.isNumber()" },
+          "$other":     { ".validate": false }
+        }
+      }
+    }
+  }
+}
