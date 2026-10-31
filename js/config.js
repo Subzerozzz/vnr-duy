@@ -8,13 +8,13 @@
 // =====================================================================
 export default {
   firebase: {
-    apiKey: "",
-    authDomain: "",
-    databaseURL: "",        // BẮT BUỘC, dạng https://xxx-default-rtdb.asia-southeast1.firebasedatabase.app
-    projectId: "",
-    storageBucket: "",
-    messagingSenderId: "",
-    appId: ""
+    apiKey: "AIzaSyBWPq3vkiEh6hFW4-B4TwYQQBlAJlGbc_g",
+    authDomain: "vnr-duy.firebaseapp.com",
+    databaseURL: "https://vnr-duy-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "vnr-duy",
+    storageBucket: "vnr-duy.firebasestorage.app",
+    messagingSenderId: "715444833749",
+    appId: "1:715444833749:web:9f06dba88de2df9382015c"
   },
 
   // Mã PIN để vào trang /admin. Để "" nếu không cần.
